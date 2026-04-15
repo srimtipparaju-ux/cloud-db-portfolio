@@ -7,6 +7,10 @@ import Contact from "@/components/Contact";
 import Demo from "@/components/Demo";
 import Architecture from "@/components/Architecture";
 
+// ✅ NEW IMPORTS
+import AIDashboard from "@/components/AIDashboard";
+import VisitorCounter from "@/components/VisitorCounter";
+
 export default function Home() {
   return (
     <main className="bg-black text-white">
@@ -15,9 +19,13 @@ export default function Home() {
       <About />
       <Architecture />
       <Projects />
-      <Demo /> 
+      <div className="grid md:grid-cols-2 gap-10 px-6 items-stretch">
+  <AIDashboard />
+  <Demo />
+</div>
       <Skills />
       <Contact />
+      <VisitorCounter />
     </main>
   );
 }

@@ -6,6 +6,7 @@ import Skills from "@/components/Skills";
 import Contact from "@/components/Contact";
 import Demo from "@/components/Demo";
 import Architecture from "@/components/Architecture";
+import Certifications from "@/components/Certifications";
 
 // ✅ NEW IMPORTS
 import AIDashboard from "@/components/AIDashboard";
@@ -16,6 +17,7 @@ export default function Home() {
     <main className="bg-black text-white">
       <Navbar />
       <Hero />
+      <Certifications /> 
       <About />
       <Architecture />
       <Projects />

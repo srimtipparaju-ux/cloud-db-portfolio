@@ -8,7 +8,7 @@ export default function Skills() {
         <div>
           <h3 className="text-green-400 mb-2">Cloud & Platforms</h3>
           <p>
-            OCI, Oracle Autonomous DB, Oracle RDBMS, PostgreSQL
+            OCI, AWS, Oracle Autonomous DB, Oracle RDBMS, PostgreSQL
           </p>
         </div>
 
@@ -16,7 +16,7 @@ export default function Skills() {
           <h3 className="text-green-400 mb-2">Database Engineering</h3>
           <p>
             SQL, PL/SQL, Performance tuning, Query optimization,
-            High availability, Backup & recovery
+            High availability, Backup & recovery, AWS Database Services
           </p>
         </div>
 
@@ -24,7 +24,7 @@ export default function Skills() {
           <h3 className="text-green-400 mb-2">DevOps & Tools</h3>
           <p>
             Docker, Kubernetes, CI/CD, Git, Python, Shell scripting,
-            AWR, ADDM, TKPROF, AppDynamics
+            AWR, ADDM, TKPROF, AppDynamics, CI/CD workflows, AWS DevOps tools
           </p>
         </div>
 

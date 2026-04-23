@@ -1,4 +1,5 @@
 "use client";
+import { FaLinkedin } from "react-icons/fa";
 
 export default function Contact() {
   return (
@@ -16,7 +17,12 @@ export default function Contact() {
         <p>
           📞 (337) 853-2128
         </p>
-
+        <p>
+  <FaLinkedin style={{ marginRight: "8px" }} />
+  <a href="https://www.linkedin.com/in/sritipparaju" target="_blank" rel="noopener noreferrer">
+    LinkedIn
+  </a>
+</p>
         {/* Location */}
         <p>
           📍 Nashville, TN

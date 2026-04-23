@@ -47,7 +47,7 @@ export default function Hero() {
           download
           className="border px-6 py-2 rounded hover:bg-white hover:text-black transition"
         >
-          Resume
+          Resume(PDF)
         </a>
       </motion.div>
     </section>

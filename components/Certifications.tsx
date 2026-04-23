@@ -4,7 +4,12 @@ const certs = [
   {
     name: "AWS Certified Solutions Architect Associate",
     image: "/aws-badge.png",
-    link: "https://www.credly.com/badges/f2fffb3e-d8f5-4724-ad4e-03e6c8ef7b57",
+    link: "https://www.credly.com/badges/f2fffb3e-d8f5-4724-ad4e-03e6c8ef7b57/public_url",
+  },
+  {
+    name: "Certfied Kubernetes Administrator",
+    image: "/cka-badge.png",
+    link: "https://www.credly.com/badges/fd5a5589-1f7d-4c64-9b28-56caf5ea7614/public_url",
   },
   // Add more here later
 ];

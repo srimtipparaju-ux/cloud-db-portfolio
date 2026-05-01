@@ -49,6 +49,13 @@ export default function Hero() {
         >
           Resume(PDF)
         </a>
+
+  <a
+    href="https://github.com/srimtipparaju-ux"
+    target="_blank"
+className="bg-green-500 px-6 py-2 rounded hover:scale-105 transition"  >
+    GitHub
+  </a>
       </motion.div>
     </section>
   );

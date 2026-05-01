@@ -7,7 +7,7 @@ export default function Architecture() {
         <ul className="space-y-2">
           <li>🌐 Frontend: Next.js (React)</li>
           <li>⚙️ Backend: API Routes</li>
-          <li>☁️ Cloud: OCI ,AWS</li>
+          <li>☁️ Cloud: OCI,AWS</li>
           <li>🗄️ Database: Oracle Autonomous DB, AWS Database Services</li>
           <li>📊 Monitoring:  OEM, AWS CloudWatch, App Dynamics</li>
         </ul>

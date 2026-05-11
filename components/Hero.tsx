@@ -43,7 +43,7 @@ export default function Hero() {
         </a>
 
         <a
-          href="/Sri_Tipparaju_Cloud_DB_resume.pdf"
+          href="/Sri_Tipparaju_SRE_Resume.pdf"
           download
           className="border px-6 py-2 rounded hover:bg-white hover:text-black transition"
         >

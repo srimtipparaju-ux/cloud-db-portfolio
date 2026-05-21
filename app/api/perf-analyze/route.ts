@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { retrieveRunbooks, formatRunbooksForPrompt } from '@/lib/runbooks';
 
 // POST /api/perf-analyze
-// Proxies to Anthropic using server-side ANTHROPIC_API_KEY.
-// API key is never sent to the browser.
+// Anthropic proxy with in-memory RAG retrieval over pre-seeded runbooks.
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -14,7 +14,19 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { system, messages } = await req.json();
+    const { system, messages, ragQuery } = await req.json();
+
+    // ── RAG: retrieve relevant runbooks ──
+    let augmentedSystem = system;
+    let retrievedTitles: string[] = [];
+
+    if (ragQuery) {
+      const retrieved = retrieveRunbooks(ragQuery, 3);
+      if (retrieved.length > 0) {
+        augmentedSystem = system + formatRunbooksForPrompt(retrieved);
+        retrievedTitles = retrieved.map(r => r.runbook.title);
+      }
+    }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -26,7 +38,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model:      'claude-sonnet-4-5',
         max_tokens: 8192,
-        system,
+        system:     augmentedSystem,
         messages,
       }),
     });
@@ -37,7 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await response.json();
-    return NextResponse.json(data);
+    return NextResponse.json({ ...data, _rag: { retrieved: retrievedTitles } });
 
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

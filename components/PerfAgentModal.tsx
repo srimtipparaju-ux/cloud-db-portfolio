@@ -75,9 +75,10 @@ interface Timeline {
 type SkillName =
   | 'awr-analysis' | 'sql-monitor-analysis' | 'sql-tuning'
   | 'thread-dump-analysis' | 'heap-dump-analysis' | 'jfr-analysis'
-  | 'ui-console-analysis' | 'stack-trace-analysis' | 'jmeter-analysis';
+  | 'ui-console-analysis' | 'stack-trace-analysis' | 'jmeter-analysis'
+  | 'k8s-analysis';
 
-type TabName = 'findings' | 'routing' | 'pipeline' | 'timeline';
+type TabName = 'findings' | 'routing' | 'pipeline' | 'timeline' | 'chat';
 
 // ── Skill metadata ───────────────────────────────────────────
 const SKILL: Record<SkillName, { icon: string; label: string; color: string; team: string }> = {
@@ -90,6 +91,7 @@ const SKILL: Record<SkillName, { icon: string; label: string; color: string; tea
   'ui-console-analysis':  { icon: '🌐',  label: 'UI Console',  color: '#ffb340', team: 'Frontend Team'    },
   'stack-trace-analysis': { icon: '💥',  label: 'Stack Trace', color: '#ff4560', team: 'On-Call'          },
   'jmeter-analysis':      { icon: '📈',  label: 'JMeter',      color: '#b06aff', team: 'Performance Team' },
+  'k8s-analysis':         { icon: '☸️',  label: 'Kubernetes',  color: '#326ce5', team: 'Platform Team'    },
 };
 
 // ── Prompts (NO triple backticks inside strings — they break JS template literals) ──
@@ -138,6 +140,11 @@ const PROMPTS: Record<SkillName, string> = {
     'You are an expert performance engineer analyzing JMeter load test results. For single release: evaluate p90/p99/errors per transaction. For release comparison: compute per-transaction deltas (p90 +50% = Critical). Map regressions to component owners. ' +
     'CRITICAL: Return ONLY a raw JSON object. No markdown fences. Start with { end with }. CONSTRAINTS: Generate 3-6 findings max. Each finding has 2-3 recommendations max, each under 25 words. Keep evidence under 30 words. Close all JSON braces properly. ' +
     '{"overallHealth":"Critical|Degraded|Fair|Good","summary":"...","keyMetrics":{"total_samples":"N","overall_error_rate":"X%","p90":"Xms"},"findings":[{"id":"F001","severity":"Critical|High|Medium|Low|Info","category":"Response Time|Error Rate|Regression","title":"...","evidence":"specific numbers with deltas","rootCause":"...","impact":"...","recommendations":["..."],"componentOwner":"team name"}]}',
+
+  'k8s-analysis':
+    'You are an expert Kubernetes SRE analyzing K8s diagnostic output. Identify: pod state issues (OOMKilled, CrashLoopBackOff, ImagePullBackOff, Pending), container resource issues (requests vs limits, CPU throttling, OOM patterns), health probe failures, scheduling issues, autoscaling problems (HPA not scaling), networking/storage failures. ' +
+    'CRITICAL: Return ONLY a raw JSON object. No markdown fences. Start with { end with }. CONSTRAINTS: Generate 3-6 findings max. Each finding has 2-3 recommendations max, each under 25 words. Keep evidence under 30 words. Close all JSON braces properly. ' +
+    '{"overallHealth":"Critical|Degraded|Fair|Good","summary":"...","keyMetrics":{"pods_total":"N","pods_failing":"N","oom_count":"N"},"findings":[{"id":"F001","severity":"Critical|High|Medium|Low|Info","category":"Pod State|Resource Limits|Health Probe|Scheduling|Autoscaling|Networking|Storage","title":"...","evidence":"pod names, exit codes, resource numbers","rootCause":"...","impact":"...","recommendations":["..."]}]}',
 };
 
 // ── Built-in sample files ────────────────────────────────────
@@ -290,6 +297,74 @@ GET /api/checkout/summary,5000,1124,1720,1.42%,28.4
 
 Component owners: Orders=Backend/Order Team, Checkout=Backend/Commerce Team`,
   },
+  {
+    name: 'k8s_pod_diagnostic.txt', skill: 'k8s-analysis', size: 4200, isBuiltIn: true,
+    content: `=== Kubernetes Diagnostic Output ===
+Namespace: production
+Cluster: prod-us-east-1
+
+$ kubectl get pods -n production -l app=order-service
+NAME                              READY   STATUS             RESTARTS      AGE
+order-service-7d9c8b6f5-2xkpq    0/1     CrashLoopBackOff   12 (2m ago)   48m
+order-service-7d9c8b6f5-7lqv4    0/1     CrashLoopBackOff   11 (3m ago)   48m
+order-service-7d9c8b6f5-9hgxn    0/1     OOMKilled          8 (47s ago)   48m
+order-service-7d9c8b6f5-bzc8d    1/1     Running            3 (12m ago)   48m
+order-service-7d9c8b6f5-mfp2j    0/1     CrashLoopBackOff   14 (1m ago)   48m
+
+$ kubectl describe pod order-service-7d9c8b6f5-9hgxn -n production
+
+Containers:
+  order-service:
+    Image:          registry.example.com/order-service:v2.8.4
+    State:          Waiting
+      Reason:       CrashLoopBackOff
+    Last State:     Terminated
+      Reason:       OOMKilled                                         << CRITICAL
+      Exit Code:    137
+    Restart Count:  8
+    Limits:
+      cpu:     1000m
+      memory:  2Gi                                                    << TOO LOW
+    Requests:
+      cpu:     500m
+      memory:  1Gi
+    Environment:
+      JAVA_OPTS:  -Xmx1800m -Xms1800m                                << 90% of container limit, no headroom
+
+Events:
+  Warning  Unhealthy  46m  kubelet  Liveness probe failed: HTTP 503
+  Warning  OOMKilled  37m  kubelet  Container order-service was OOMKilled (exit 137)
+  Warning  OOMKilled  28m  kubelet  Container order-service was OOMKilled (exit 137)
+  Warning  OOMKilled  18m  kubelet  Container order-service was OOMKilled (exit 137)
+  Warning  OOMKilled  8m   kubelet  Container order-service was OOMKilled (exit 137)
+  Warning  OOMKilled  47s  kubelet  Container order-service was OOMKilled (exit 137)
+  Warning  BackOff    12s  kubelet  Back-off restarting failed container
+
+$ kubectl top pods -n production -l app=order-service
+NAME                              CPU(cores)   MEMORY(bytes)
+order-service-7d9c8b6f5-bzc8d    420m         1924Mi               << 94% of 2Gi limit
+
+$ kubectl get hpa order-service-hpa -n production
+NAME                REFERENCE                  TARGETS                   MINPODS   MAXPODS
+order-service-hpa   Deployment/order-service   <unknown>/70%, 95%/80%    3         10
+
+HPA cannot scale up - metrics-server fails for crashlooping pods.
+
+$ kubectl logs order-service-7d9c8b6f5-9hgxn --previous --tail=15
+2024-03-15 14:23:48 INFO  CacheWarmupService - Starting cache warmup
+2024-03-15 14:24:12 INFO  CacheWarmupService - Loaded 4,820,293 OrderSummary into LocalOrderCache
+2024-03-15 14:24:55 ERROR OrderController - java.lang.OutOfMemoryError: Java heap space
+        at com.example.cache.LocalOrderCache.put(LocalOrderCache.java:67)
+        at com.example.service.CacheWarmupService.warmup(CacheWarmupService.java:134)
+[Pod terminated by kubelet: OOMKilled (exit code 137)]
+
+SUMMARY:
+- 4 of 5 pods in CrashLoopBackOff / OOMKilled state
+- Memory limit 2Gi insufficient for cache warmup workload
+- JAVA_OPTS Xmx=1800m is 90% of container limit - no headroom
+- HPA cannot autoscale (no healthy pods for baseline metrics)
+- Service unavailable - 504s cascading`,
+  },
 ];
 
 // ── Skill detection ──────────────────────────────────────────
@@ -301,8 +376,10 @@ function detectSkill(name: string, content: string): SkillName {
   if (ext === '.hprof')      return 'heap-dump-analysis';
   if (ext === '.har')        return 'ui-console-analysis';
   if (ext === '.csv' || ext === '.jtl') return 'jmeter-analysis';
+  if (ext === '.yaml' || ext === '.yml') return 'k8s-analysis';
 
   const checks: { skill: SkillName; kws: string[] }[] = [
+    { skill: 'k8s-analysis',         kws: ['kubectl','crashloopbackoff','oomkilled','pod/','imagepullbackoff','kubernetes','namespace:','replicaset','daemonset'] },
     { skill: 'jmeter-analysis',      kws: ['90% line','error %','throughput','jmeter','aggregate report'] },
     { skill: 'awr-analysis',         kws: ['snap id','db name','awr','load profile','buffer hit','elapsed time'] },
     { skill: 'sql-monitor-analysis', kws: ['sql monitoring','a-rows','e-rows','plan operation','sql_id'] },
@@ -405,6 +482,10 @@ export default function PerfAgentModal({ onClose }: { onClose: () => void }) {
   const [timeline, setTimeline]   = useState<Timeline | null>(null);
   const [correlating, setCorrelating] = useState(false);
   const [expanded, setExpanded]   = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<{role:'user'|'assistant';content:string}[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatSending, setChatSending] = useState(false);
+  const [lastRetrievedRunbooks, setLastRetrievedRunbooks] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const analyzedCount = files.filter(f => results[f.name]).length;
@@ -441,15 +522,24 @@ export default function PerfAgentModal({ onClose }: { onClose: () => void }) {
     setLoading(file.name);
     try {
       const userMsg = `Analyze this ${file.skill.replace(/-/g, ' ')} diagnostic. Return ONLY raw JSON (no markdown, no fences, start with { end with }):\n\n${file.content.slice(0, 60000)}`;
+      // Build RAG query from the file content — top 500 chars + skill name
+      const ragQuery = `${file.skill} ${file.content.slice(0, 500)}`;
+
       const resp = await fetch('/api/perf-analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ system: PROMPTS[file.skill], messages: [{ role: 'user', content: userMsg }] }),
+        body: JSON.stringify({
+          system: PROMPTS[file.skill],
+          messages: [{ role: 'user', content: userMsg }],
+          ragQuery,
+        }),
       });
       if (!resp.ok) throw new Error(`API error ${resp.status}`);
       const data = await resp.json();
       const raw  = data.content?.find((b: any) => b.type === 'text')?.text || '';
       const parsed = extractJSON(raw);
+      // Capture retrieved runbooks for display
+      if (data._rag?.retrieved?.length) setLastRetrievedRunbooks(data._rag.retrieved);
       setResults(prev => ({
         ...prev,
         [file.name]: parsed || {
@@ -483,10 +573,15 @@ export default function PerfAgentModal({ onClose }: { onClose: () => void }) {
           const userMsg = `Analyze this ${file.skill.replace(/-/g, ' ')} diagnostic. Return ONLY raw JSON (no markdown, no fences, start with { end with }):
 
 ${file.content.slice(0, 60000)}`;
+          const ragQuery = `${file.skill} ${file.content.slice(0, 500)}`;
           const resp = await fetch('/api/perf-analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ system: PROMPTS[file.skill], messages: [{ role: 'user', content: userMsg }] }),
+            body: JSON.stringify({
+              system: PROMPTS[file.skill],
+              messages: [{ role: 'user', content: userMsg }],
+              ragQuery,
+            }),
           });
           if (!resp.ok) throw new Error(`API error ${resp.status}`);
           const data = await resp.json();
@@ -570,15 +665,69 @@ ${file.content.slice(0, 60000)}`;
     }
   }, [files, results]);
 
+  // ── Chat ───────────────────────────────────────────────────
+  const sendChatMessage = useCallback(async () => {
+    const text = chatInput.trim();
+    if (!text || chatSending) return;
+
+    const newHistory = [...chatMessages, { role: 'user' as const, content: text }];
+    setChatMessages(newHistory);
+    setChatInput('');
+    setChatSending(true);
+
+    try {
+      // Build incident context from current state
+      const incidentContext = {
+        rootCause: timeline?.rootCause || '',
+        summary:   timeline?.incidentSummary || '',
+        severity:  timeline?.overallSeverity || '',
+        findings:  Object.entries(results).flatMap(([fileName, r]) =>
+          (r.findings || []).slice(0, 3).map((f: Finding) => ({
+            file: fileName, severity: f.severity, title: f.title, evidence: f.evidence,
+          }))
+        ).slice(0, 12),
+      };
+
+      const systemPrompt = `You are an expert SRE / Performance Engineering copilot helping with this specific incident.
+Be direct and technical. Cite specific evidence when relevant. Never invent metrics.
+
+CURRENT INCIDENT:
+Root cause: ${incidentContext.rootCause}
+Severity: ${incidentContext.severity}
+Summary: ${incidentContext.summary}
+
+Top findings:
+${incidentContext.findings.map(f => `  [${f.severity}] ${f.file}: ${f.title} — ${f.evidence}`).join('\n')}
+
+If asked to write a Slack message, Jira ticket, or status update, use proper formatting.`;
+
+      // RAG: use the user's latest question as the retrieval query
+      const ragQuery = text;
+      const resp = await fetch('/api/perf-analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ system: systemPrompt, messages: newHistory, ragQuery }),
+      });
+      if (!resp.ok) throw new Error(`API error ${resp.status}`);
+      const data  = await resp.json();
+      const reply = data.content?.find((b: any) => b.type === 'text')?.text || 'No response';
+      setChatMessages([...newHistory, { role: 'assistant', content: reply }]);
+    } catch (err: any) {
+      setChatMessages([...newHistory, { role: 'assistant', content: `Error: ${err.message}` }]);
+    } finally {
+      setChatSending(false);
+    }
+  }, [chatInput, chatMessages, chatSending, results, timeline]);
+
   // ── Render ─────────────────────────────────────────────────
   const showTimeline = analyzedCount >= 2;
 
   return (
-    <div style={{position:'fixed',inset:0,zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',background:'rgba(0,0,0,0.85)',backdropFilter:'blur(4px)'}}>
-      <div style={{position:'relative',width:'100%',maxWidth:'1152px',height:'90vh',background:'#08090c',border:'1px solid #1f2937',borderRadius:'12px',overflow:'hidden',display:'flex',flexDirection:'column'}}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className="relative w-full max-w-6xl h-[90vh] bg-[#08090c] border border-gray-800 rounded-xl overflow-hidden flex flex-col">
 
         {/* Header */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 20px",borderBottom:"1px solid #1f2937",background:"#0e1017",flexShrink:0}}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800 bg-[#0e1017] flex-shrink-0">
           <div className="flex items-center gap-3">
             <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse shadow-[0_0_8px_#4ade80]" />
             <span className="font-mono text-green-400 font-bold tracking-widest text-sm">PERFAGENT</span>
@@ -588,10 +737,10 @@ ${file.content.slice(0, 60000)}`;
         </div>
 
         {/* Body */}
-        <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+        <div className="flex flex-1 overflow-hidden">
 
           {/* Sidebar */}
-          <div style={{width:"256px",flexShrink:0,borderRight:"1px solid #1f2937",display:"flex",flexDirection:"column",background:"#0e1017"}}>
+          <div className="w-64 flex-shrink-0 border-r border-gray-800 flex flex-col bg-[#0e1017]">
 
             {/* File count */}
             {files.length > 0 && (
@@ -624,7 +773,7 @@ ${file.content.slice(0, 60000)}`;
             )}
 
             {/* File list */}
-            <div style={{flex:1,overflowY:"auto"}}>
+            <div className="flex-1 overflow-y-auto">
               {files.map(f => {
                 const m       = SKILL[f.skill];
                 const done    = !!results[f.name];
@@ -671,17 +820,17 @@ ${file.content.slice(0, 60000)}`;
           </div>
 
           {/* Main */}
-          <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          <div className="flex-1 flex flex-col overflow-hidden">
 
             {/* Tabs */}
-            <div style={{display:"flex",borderBottom:"1px solid #1f2937",background:"#0e1017",flexShrink:0,overflowX:"auto"}}>
-              {(['findings', 'routing', 'pipeline', ...(showTimeline ? ['timeline'] : [])] as TabName[]).map(t => (
+            <div className="flex border-b border-gray-800 bg-[#0e1017] flex-shrink-0 overflow-x-auto">
+              {(['findings', 'routing', 'pipeline', ...(showTimeline ? ['timeline', 'chat'] : [])] as TabName[]).map(t => (
                 <button key={t}
                   onClick={() => { setTab(t); if (t === 'timeline' && !timeline && !correlating) correlate(); }}
                   className={`px-4 py-3 text-xs font-mono whitespace-nowrap border-b-2 transition-all ${
                     tab === t ? 'border-green-400 text-green-400' : 'border-transparent text-gray-600 hover:text-white/70'
                   }`}>
-                  {t === 'timeline' ? '⚡ ' : ''}{t.charAt(0).toUpperCase() + t.slice(1)}
+                  {t === 'timeline' ? '⚡ ' : t === 'chat' ? '💬 ' : ''}{t.charAt(0).toUpperCase() + t.slice(1)}
                   {t === 'findings' && result && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-gray-800 text-gray-500">{result.findings?.length || 0}</span>}
                   {t === 'timeline' && timeline && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-green-400/15 text-green-400">{timeline.timelineEvents?.length || 0}</span>}
                 </button>
@@ -689,7 +838,7 @@ ${file.content.slice(0, 60000)}`;
             </div>
 
             {/* Content */}
-            <div style={{flex:1,overflowY:"auto",padding:"20px"}}>
+            <div className="flex-1 overflow-y-auto p-5">
 
               {/* Empty */}
               {!active && tab !== 'timeline' && (
@@ -716,7 +865,8 @@ ${file.content.slice(0, 60000)}`;
 
               {/* Findings */}
               {tab === 'findings' && result && active && !loading && (
-                <FindingsPanel result={result} file={active} meta={meta!} expanded={expanded} onToggle={setExpanded} />
+                <FindingsPanel result={result} file={active} meta={meta!} expanded={expanded} onToggle={setExpanded}
+                  retrievedRunbooks={lastRetrievedRunbooks} />
               )}
 
               {/* Routing */}
@@ -733,6 +883,16 @@ ${file.content.slice(0, 60000)}`;
               {tab === 'timeline' && (
                 <TimelinePanel timeline={timeline} correlating={correlating} analyzing={analyzingAll} progress={allProgress} count={analyzedCount} />
               )}
+
+              {tab === 'chat' && (
+                <ChatPanel
+                  messages={chatMessages}
+                  input={chatInput}
+                  setInput={setChatInput}
+                  onSend={sendChatMessage}
+                  sending={chatSending}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -745,10 +905,11 @@ ${file.content.slice(0, 60000)}`;
 // SUB-PANELS
 // ─────────────────────────────────────────────────────────────
 
-function FindingsPanel({ result, file, meta, expanded, onToggle }: {
+function FindingsPanel({ result, file, meta, expanded, onToggle, retrievedRunbooks = [] }: {
   result: AnalysisResult; file: FileItem;
   meta: typeof SKILL[SkillName]; expanded: string | null;
   onToggle: (id: string | null) => void;
+  retrievedRunbooks?: string[];
 }) {
   const hc = result.overallHealth || 'Fair';
   const hColor: Record<string, string> = { Critical: 'text-red-400', Degraded: 'text-orange-400', High: 'text-orange-400', Fair: 'text-yellow-400', Medium: 'text-yellow-400', Good: 'text-green-400', Low: 'text-green-400' };
@@ -763,6 +924,25 @@ function FindingsPanel({ result, file, meta, expanded, onToggle }: {
         </div>
         <div className="text-xs text-white/70 leading-relaxed">{result.summary}</div>
       </div>
+
+      {retrievedRunbooks.length > 0 && (
+        <div className="border border-purple-400/30 bg-purple-400/5 rounded-lg p-3">
+          <div className="text-[9px] text-purple-400 font-bold uppercase tracking-widest mb-2">
+            📚 RAG · Retrieved {retrievedRunbooks.length} relevant runbook{retrievedRunbooks.length > 1 ? 's' : ''}
+          </div>
+          <div className="space-y-1">
+            {retrievedRunbooks.map((title, i) => (
+              <div key={i} className="text-[11px] text-white/70 flex items-center gap-2">
+                <span className="text-purple-400/70">▸</span>
+                <span>{title}</span>
+              </div>
+            ))}
+          </div>
+          <div className="text-[9px] text-white/40 mt-2 italic">
+            Claude analyzed this file with context from your team\'s runbooks.
+          </div>
+        </div>
+      )}
 
       {Object.entries(result.keyMetrics || {}).length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -1030,6 +1210,87 @@ function TimelinePanel({ timeline, correlating, analyzing, progress, count }: {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// ChatPanel — conversational follow-up over the incident
+// ─────────────────────────────────────────────────────────────
+function ChatPanel({ messages, input, setInput, onSend, sending }: {
+  messages: { role: 'user'|'assistant'; content: string }[];
+  input: string;
+  setInput: (v: string) => void;
+  onSend: () => void;
+  sending: boolean;
+}) {
+  return (
+    <div style={{display:'flex',flexDirection:'column',height:'100%',gap:'12px'}}>
+      <div style={{padding:'12px 16px',background:'rgba(74,222,128,0.06)',
+                   border:'1px solid rgba(74,222,128,0.25)',borderRadius:'8px',flexShrink:0}}>
+        <div style={{fontSize:'11px',color:'#4ade80',fontWeight:600,fontFamily:'monospace',letterSpacing:'0.5px'}}>
+          💬 SRE COPILOT
+        </div>
+        <div style={{fontSize:'10px',color:'#6b7280',marginTop:4}}>
+          Ask follow-up questions: "Which finding first?" · "Write a Jira ticket" · "Summarize for my manager"
+        </div>
+      </div>
+
+      <div style={{flex:1,overflowY:'auto',display:'flex',flexDirection:'column',gap:'10px',padding:'4px'}}>
+        {messages.length === 0 ? (
+          <div style={{textAlign:'center',padding:'40px 20px',color:'#6b7280',fontSize:'11px'}}>
+            No messages yet. Ask anything about the incident below.
+          </div>
+        ) : messages.map((m, i) => {
+          const isUser = m.role === 'user';
+          return (
+            <div key={i} style={{display:'flex',flexDirection:'column',gap:'4px',
+                                  alignItems: isUser ? 'flex-end' : 'flex-start'}}>
+              <div style={{fontFamily:'monospace',fontSize:'9px',color:'#6b7280',letterSpacing:'1px'}}>
+                {isUser ? 'YOU' : 'PERFAGENT'}
+              </div>
+              <div style={{
+                maxWidth:'75%',padding:'10px 14px',
+                background: isUser ? 'rgba(74,222,128,0.08)' : '#111827',
+                border: `1px solid ${isUser ? 'rgba(74,222,128,0.25)' : '#1f2937'}`,
+                borderRadius:'8px',
+                color: isUser ? '#4ade80' : '#e5e7eb',
+                fontSize:'12px',lineHeight:1.55,whiteSpace:'pre-wrap'}}>
+                {m.content}
+              </div>
+            </div>
+          );
+        })}
+        {sending && (
+          <div style={{color:'#6b7280',fontSize:'11px',padding:'8px',fontFamily:'monospace'}}>
+            PerfAgent is thinking...
+          </div>
+        )}
+      </div>
+
+      <div style={{display:'flex',gap:'8px',flexShrink:0,paddingTop:'8px',borderTop:'1px solid #1f2937'}}>
+        <input
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && onSend()}
+          placeholder="Ask about this incident..."
+          disabled={sending}
+          style={{flex:1,padding:'8px 12px',background:'#111827',border:'1px solid #1f2937',
+                  color:'#e5e7eb',fontFamily:'monospace',fontSize:'11px',borderRadius:'6px',outline:'none'}}
+        />
+        <button
+          onClick={onSend}
+          disabled={sending || !input.trim()}
+          style={{padding:'8px 16px',background:'rgba(74,222,128,0.12)',
+                  border:'1px solid #4ade80',color:'#4ade80',
+                  fontFamily:'monospace',fontSize:'11px',fontWeight:600,
+                  borderRadius:'6px',cursor:sending ? 'not-allowed' : 'pointer',
+                  opacity: sending ? 0.5 : 1}}>
+          Send
+        </button>
+      </div>
     </div>
   );
 }

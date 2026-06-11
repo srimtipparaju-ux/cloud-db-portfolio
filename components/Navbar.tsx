@@ -1,20 +1,31 @@
 "use client";
 import { motion } from "framer-motion";
 
+const LINKS = [
+  { href: "#projects", label: "Work" },
+  { href: "#architecture", label: "Stack" },
+  { href: "#skills", label: "Skills" },
+  { href: "#contact", label: "Contact" },
+];
+
 export default function Navbar() {
   return (
     <motion.nav
-      initial={{ y: -80 }}
+      initial={{ y: -64 }}
       animate={{ y: 0 }}
-      className="fixed top-0 w-full bg-black/70 backdrop-blur-md z-50 border-b border-gray-800"
+      className="fixed top-0 w-full z-50 border-b border-[var(--line-soft)] bg-[rgba(11,16,24,0.82)] backdrop-blur-md"
     >
-      <div className="max-w-6xl mx-auto flex justify-between items-center p-4 text-white">
-        <h1 className="font-bold text-lg">Sri Tipparaju</h1>
+      <div className="max-w-6xl mx-auto flex justify-between items-center px-6 h-14">
+        <a href="#" className="font-mono text-sm tracking-wider text-[var(--ink)]">
+          <span className="text-[var(--teal)]">~/</span>sri-tipparaju
+        </a>
 
-        <div className="flex gap-6 text-sm">
-          <a href="#projects" className="hover:text-green-400">Projects</a>
-          <a href="#skills" className="hover:text-green-400">Skills</a>
-          <a href="#contact" className="hover:text-green-400">Contact</a>
+        <div className="flex gap-6 text-sm text-[var(--ink-soft)]">
+          {LINKS.map((l) => (
+            <a key={l.href} href={l.href} className="hover:text-[var(--teal)] transition-colors">
+              {l.label}
+            </a>
+          ))}
         </div>
       </div>
     </motion.nav>

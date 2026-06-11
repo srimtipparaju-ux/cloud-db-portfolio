@@ -1,33 +1,47 @@
+const GROUPS = [
+  {
+    title: "SRE / Reliability",
+    items: ["SLOs · SLAs · Error budgets", "Incident management", "On-call runbooks", "Chaos engineering", "Capacity planning"],
+  },
+  {
+    title: "Cloud & Databases",
+    items: ["OCI · AWS multi-cloud", "Oracle Autonomous DB", "CDB/PDB multitenant", "PostgreSQL · RDS · Aurora", "Data Guard · GoldenGate"],
+  },
+  {
+    title: "AI / LLM Engineering",
+    items: ["Anthropic Claude API", "RAG · vector embeddings", "Multi-agent orchestration", "LLMOps · cost tracking", "Prompt engineering"],
+  },
+  {
+    title: "Automation & DevOps",
+    items: ["Python · Shell · TypeScript", "Kubernetes (CKA) · Docker", "Terraform · Helm", "AWR · ADDM · AppDynamics", "CI/CD pipelines"],
+  },
+];
+
 export default function Skills() {
   return (
-    <section id="skills" className="p-10">
-      <h2 className="text-3xl mb-6">Technical Expertise</h2>
+    <section id="skills" className="px-6 py-20 max-w-6xl mx-auto">
+      <div className="section-head">
+        <div className="eyebrow">skills</div>
+        <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
+          Technical expertise
+        </h2>
+      </div>
 
-      <div className="grid md:grid-cols-3 gap-6 text-gray-300">
-
-        <div>
-          <h3 className="text-green-400 mb-2">Cloud & Platforms</h3>
-          <p>
-            OCI, AWS, Oracle Autonomous DB, Oracle RDBMS, PostgreSQL
-          </p>
-        </div>
-
-        <div>
-          <h3 className="text-green-400 mb-2">Database Engineering</h3>
-          <p>
-            SQL, PL/SQL, Performance tuning, Query optimization,
-            High availability, Backup & recovery, AWS Database Services
-          </p>
-        </div>
-
-        <div>
-          <h3 className="text-green-400 mb-2">DevOps & Tools</h3>
-          <p>
-            Docker, Kubernetes, CI/CD, Git, Python, Shell scripting,
-            AWR, ADDM, TKPROF, AppDynamics, CI/CD workflows, AWS DevOps tools
-          </p>
-        </div>
-
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {GROUPS.map((g) => (
+          <div key={g.title} className="panel panel-hover p-5">
+            <h3 className="font-mono text-xs tracking-wider uppercase text-[var(--teal)] mb-4">
+              {g.title}
+            </h3>
+            <ul className="space-y-2">
+              {g.items.map((item) => (
+                <li key={item} className="text-sm text-[var(--ink-soft)]">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
     </section>
   );

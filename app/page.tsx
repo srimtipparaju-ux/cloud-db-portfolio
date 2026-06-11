@@ -13,60 +13,58 @@ import PerfAgentButton from "@/components/PerfAgentButton";
 
 export default function Home() {
   return (
-    <main className="bg-black text-white">
+    <main>
       <Navbar />
       <Hero />
       <Certifications />
       <About />
-      <Architecture />
       <Projects />
 
-      {/* ── OpsMind Architecture Flow GIF ─────────────────────── */}
-      <section className="px-6 py-12 border-t border-white/5">
-        <div className="max-w-5xl mx-auto space-y-6">
-          <div className="text-center">
-            <div className="text-xs font-mono text-green-400 tracking-widest uppercase mb-2">
-              Architecture
-            </div>
-            <h2 className="text-2xl font-bold">How OpsMind works</h2>
-            <p className="text-white/60 text-sm mt-3 max-w-2xl mx-auto leading-relaxed">
-              Diagnostic artifacts flow through the API gateway, get classified and analyzed by
-              5 specialized agents in parallel. RAG retrieves runbooks. Findings route to Slack,
-              Jira, and email automatically.
-            </p>
-          </div>
-          <div className="rounded-lg overflow-hidden border border-white/10 bg-black">
-            <img
-              src="/perfagent/perfagent_architecture_flow.gif"
-              alt="OpsMind AI SRE Copilot — architecture flow diagram"
-              className="w-full h-auto"
-            />
-          </div>
+      {/* ── OpsMind Architecture Flow ─────────────────────────── */}
+      <section className="px-6 py-20 max-w-6xl mx-auto">
+        <div className="section-head" style={{ marginBottom: "1rem" }}>
+          <div className="eyebrow">architecture</div>
+          <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
+            How OpsMind works
+          </h2>
+        </div>
+        <p className="text-[var(--ink-soft)] text-sm max-w-2xl mx-auto text-center mb-8 leading-relaxed">
+          Diagnostic artifacts flow through the API gateway, get classified and
+          analyzed by 5 specialized agents in parallel. RAG retrieves runbooks.
+          Findings route to Slack, Jira, and email automatically.
+        </p>
+        <div className="panel overflow-hidden">
+          <img
+            src="/perfagent/perfagent_architecture_flow.gif"
+            alt="OpsMind AI SRE Copilot — animated architecture flow diagram"
+            className="w-full h-auto"
+          />
         </div>
       </section>
 
-      {/* ── PerfAgent Live Demo ──────────────────────────────── */}
-      <section className="px-6 py-16 border-t border-white/5">
-        <div className="max-w-4xl mx-auto text-center space-y-4">
-          <div className="text-xs font-mono text-green-400 tracking-widest uppercase">
-            Featured Project — Live Demo
-          </div>
-          <h2 className="text-3xl font-bold">PerfAgent</h2>
-          <p className="text-white/60 text-sm leading-relaxed max-w-xl mx-auto">
-            AI-powered performance diagnostic platform. Analyzes Oracle AWR, thread dumps,
-            heap dumps, JFR, SQL, browser logs, and JMeter results — simultaneously.
-            Now with RAG over runbooks and a conversational chat interface.
+      {/* ── Live Demo ─────────────────────────────────────────── */}
+      <section id="perfagent-demo" className="px-6 py-20 max-w-6xl mx-auto">
+        <div className="panel p-8 md:p-12 text-center border-l-2 border-l-[var(--teal)]">
+          <div className="eyebrow justify-center mb-4">live demo</div>
+          <h2 className="text-3xl font-semibold tracking-tight mb-3">OpsMind in action</h2>
+          <p className="text-[var(--ink-soft)] text-sm leading-relaxed max-w-xl mx-auto mb-8">
+            Analyze real diagnostic samples — Oracle AWR, thread dumps, heap dumps,
+            Kubernetes pod failures — and watch the AI build a unified incident
+            timeline with RAG-retrieved runbooks and conversational follow-up.
           </p>
-          <div className="flex justify-center pt-2">
+          <div className="flex justify-center">
             <PerfAgentButton />
           </div>
         </div>
       </section>
 
-      <div className="grid md:grid-cols-2 gap-10 px-6 items-stretch">
+      <Architecture />
+
+      <div className="px-6 py-4 max-w-6xl mx-auto grid md:grid-cols-2 gap-6 items-stretch">
         <AIDashboard />
         <Demo />
       </div>
+
       <Skills />
       <Contact />
       <VisitorCounter />

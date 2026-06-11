@@ -78,7 +78,33 @@ type SkillName =
   | 'ui-console-analysis' | 'stack-trace-analysis' | 'jmeter-analysis'
   | 'k8s-analysis';
 
-type TabName = 'findings' | 'routing' | 'pipeline' | 'timeline' | 'chat';
+type TabName = 'findings' | 'routing' | 'pipeline' | 'timeline' | 'chat' | 'runs';
+
+// ── Run history (data engineering layer, browser-persisted) ──
+type RunRecord = {
+  id: string;
+  startedAt: string;
+  durationMs: number;
+  fileCount: number;
+  overallSeverity: string;
+  rootCause: string;
+  findingsTotal: number;
+  findingsBySeverity: Record<string, number>;
+  findingsBySkill: Record<string, number>;
+};
+
+const RUNS_KEY = 'opsmind_runs_v1';
+
+function loadRunHistory(): RunRecord[] {
+  try { return JSON.parse(localStorage.getItem(RUNS_KEY) || '[]'); } catch { return []; }
+}
+function saveRunHistory(record: RunRecord) {
+  try {
+    const runs = loadRunHistory();
+    runs.unshift(record);
+    localStorage.setItem(RUNS_KEY, JSON.stringify(runs.slice(0, 100)));
+  } catch { /* storage unavailable — non-fatal */ }
+}
 
 // ── Skill metadata ───────────────────────────────────────────
 const SKILL: Record<SkillName, { icon: string; label: string; color: string; team: string }> = {
@@ -454,7 +480,7 @@ const SEV: Record<string, string> = {
   Critical: 'text-red-400 bg-red-400/10 border-red-400/30',
   High:     'text-orange-400 bg-orange-400/10 border-orange-400/30',
   Medium:   'text-yellow-400 bg-yellow-400/10 border-yellow-400/30',
-  Low:      'text-green-400 bg-green-400/10 border-green-400/30',
+  Low:      'text-teal-300 bg-teal-300/10 border-teal-300/30',
   Info:     'text-blue-400 bg-blue-400/10 border-blue-400/30',
 };
 
@@ -557,6 +583,7 @@ export default function PerfAgentModal({ onClose }: { onClose: () => void }) {
 
   // ── Analyze All + Correlate (one-click full pipeline) ────────
   const analyzeAll = useCallback(async () => {
+    const runStart = Date.now();
     setAnalyzingAll(true);
     setTab('timeline');
     // Init progress state
@@ -625,6 +652,7 @@ ${file.content.slice(0, 60000)}`;
           const raw  = data.content?.find((b: any) => b.type === 'text')?.text || '';
           const parsed = extractJSON(raw);
           setTimeline(parsed || { rootCause: 'Parse failed', incidentSummary: raw.slice(0,400), overallSeverity: 'Medium', timelineEvents: [], causalChain: [], crossArtifactLinks: [], immediateActions: [] });
+          if (parsed) recordRunFromState(parsed, latestResults, analyzed, runStart);
         }
         setCorrelating(false);
       }
@@ -632,6 +660,30 @@ ${file.content.slice(0, 60000)}`;
 
     setAnalyzingAll(false);
   }, [files]);
+
+  // ── Record run into browser-persisted history ──────────────
+  const recordRunFromState = useCallback((tl: any, latestResults: Record<string, AnalysisResult>, analyzedFiles: FileItem[], startedMs: number) => {
+    const findingsBySeverity: Record<string, number> = {};
+    const findingsBySkill: Record<string, number> = {};
+    let findingsTotal = 0;
+    for (const f of analyzedFiles) {
+      const r = latestResults[f.name];
+      for (const fd of (r?.findings || [])) {
+        findingsTotal++;
+        findingsBySeverity[fd.severity] = (findingsBySeverity[fd.severity] || 0) + 1;
+        findingsBySkill[f.skill] = (findingsBySkill[f.skill] || 0) + 1;
+      }
+    }
+    saveRunHistory({
+      id: 'run-' + Date.now(),
+      startedAt: new Date().toISOString(),
+      durationMs: Date.now() - startedMs,
+      fileCount: analyzedFiles.length,
+      overallSeverity: tl?.overallSeverity || 'Info',
+      rootCause: tl?.rootCause || '',
+      findingsTotal, findingsBySeverity, findingsBySkill,
+    });
+  }, []);
 
   // ── Correlate ──────────────────────────────────────────────
   const correlate = useCallback(async () => {
@@ -729,8 +781,8 @@ If asked to write a Slack message, Jira ticket, or status update, use proper for
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800 bg-[#0e1017] flex-shrink-0">
           <div className="flex items-center gap-3">
-            <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse shadow-[0_0_8px_#4ade80]" />
-            <span className="font-mono text-green-400 font-bold tracking-widest text-sm">PERFAGENT</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-teal-300 animate-pulse shadow-[0_0_8px_#5eead4]" />
+            <span className="font-mono font-bold tracking-widest text-sm" style={{color:"#5eead4"}}>OPSMIND</span>
             <span className="text-[10px] text-gray-600 border border-gray-800 px-2 py-0.5 rounded">AI PERFORMANCE DIAGNOSTICS</span>
           </div>
           <button onClick={onClose} className="text-gray-600 hover:text-white transition-colors text-lg leading-none">✕</button>
@@ -745,7 +797,7 @@ If asked to write a Slack message, Jira ticket, or status update, use proper for
             {/* File count */}
             {files.length > 0 && (
               <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between text-[10px] font-mono">
-                <span className="text-green-400 font-semibold">{files.length} files</span>
+                <span className="text-teal-300 font-semibold">{files.length} files</span>
                 {analyzedCount > 0 && <span className="text-gray-600">{analyzedCount} analyzed</span>}
               </div>
             )}
@@ -756,7 +808,7 @@ If asked to write a Slack message, Jira ticket, or status update, use proper for
                 <button
                   onClick={analyzeAll}
                   disabled={analyzingAll || correlating}
-                  className="w-full py-2 text-[10px] font-mono font-bold rounded border border-green-400/50 bg-green-400/10 text-green-400 hover:bg-green-400/15 transition-colors disabled:opacity-50"
+                  className="w-full py-2 text-[10px] font-mono font-bold rounded border border-teal-300/50 bg-teal-300/10 text-teal-300 hover:bg-teal-300/15 transition-colors disabled:opacity-50"
                 >
                   {analyzingAll ? '⏳ Analyzing...' : `🚀 Analyze All ${files.length} + Timeline`}
                 </button>
@@ -764,7 +816,7 @@ If asked to write a Slack message, Jira ticket, or status update, use proper for
                   <button
                     onClick={correlate}
                     disabled={correlating || analyzingAll}
-                    className="w-full py-1.5 text-[9px] font-mono rounded border border-green-400/25 text-green-400/70 hover:text-green-400 hover:border-green-400/40 transition-colors disabled:opacity-50"
+                    className="w-full py-1.5 text-[9px] font-mono rounded border border-teal-300/25 text-teal-300/70 hover:text-teal-300 hover:border-teal-300/40 transition-colors disabled:opacity-50"
                   >
                     {correlating ? '⚡ Correlating...' : `⚡ Correlate ${analyzedCount} analyzed`}
                   </button>
@@ -785,7 +837,7 @@ If asked to write a Slack message, Jira ticket, or status update, use proper for
                     key={f.name}
                     onClick={() => analyze(f)}
                     className={`w-full text-left px-4 py-3 border-l-2 transition-all ${
-                      isActive ? 'border-green-400 bg-green-400/5' : 'border-transparent hover:bg-gray-900'
+                      isActive ? 'border-teal-300 bg-teal-300/5' : 'border-transparent hover:bg-gray-900'
                     }`}
                   >
                     <div className="flex items-start gap-2">
@@ -824,15 +876,15 @@ If asked to write a Slack message, Jira ticket, or status update, use proper for
 
             {/* Tabs */}
             <div className="flex border-b border-gray-800 bg-[#0e1017] flex-shrink-0 overflow-x-auto">
-              {(['findings', 'routing', 'pipeline', ...(showTimeline ? ['timeline', 'chat'] : [])] as TabName[]).map(t => (
+              {(['findings', 'routing', 'pipeline', ...(showTimeline ? ['timeline', 'chat'] : []), 'runs'] as TabName[]).map(t => (
                 <button key={t}
                   onClick={() => { setTab(t); if (t === 'timeline' && !timeline && !correlating) correlate(); }}
                   className={`px-4 py-3 text-xs font-mono whitespace-nowrap border-b-2 transition-all ${
-                    tab === t ? 'border-green-400 text-green-400' : 'border-transparent text-gray-600 hover:text-white/70'
+                    tab === t ? 'border-teal-300 text-teal-300' : 'border-transparent text-gray-600 hover:text-white/70'
                   }`}>
-                  {t === 'timeline' ? '⚡ ' : t === 'chat' ? '💬 ' : ''}{t.charAt(0).toUpperCase() + t.slice(1)}
+                  {t === 'timeline' ? '⚡ ' : t === 'chat' ? '💬 ' : t === 'runs' ? '📊 ' : ''}{t.charAt(0).toUpperCase() + t.slice(1)}
                   {t === 'findings' && result && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-gray-800 text-gray-500">{result.findings?.length || 0}</span>}
-                  {t === 'timeline' && timeline && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-green-400/15 text-green-400">{timeline.timelineEvents?.length || 0}</span>}
+                  {t === 'timeline' && timeline && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-teal-300/15 text-teal-300">{timeline.timelineEvents?.length || 0}</span>}
                 </button>
               ))}
             </div>
@@ -844,7 +896,7 @@ If asked to write a Slack message, Jira ticket, or status update, use proper for
               {!active && tab !== 'timeline' && (
                 <div className="h-full flex flex-col items-center justify-center gap-4 text-center">
                   <div className="text-5xl opacity-20">🔬</div>
-                  <div className="font-mono text-gray-800 text-2xl font-bold tracking-widest">PERF AGENT</div>
+                  <div className="font-mono text-gray-800 text-2xl font-bold tracking-widest">OPSMIND</div>
                   <div className="text-xs text-gray-600 max-w-xs leading-relaxed">
                     Click any file to analyze it. Use the built-in samples or upload your own diagnostic files.
                     Analyze 2+ files to unlock the ⚡ Incident Timeline.
@@ -884,6 +936,8 @@ If asked to write a Slack message, Jira ticket, or status update, use proper for
                 <TimelinePanel timeline={timeline} correlating={correlating} analyzing={analyzingAll} progress={allProgress} count={analyzedCount} />
               )}
 
+              {tab === 'runs' && <RunsPanel />}
+
               {tab === 'chat' && (
                 <ChatPanel
                   messages={chatMessages}
@@ -912,8 +966,8 @@ function FindingsPanel({ result, file, meta, expanded, onToggle, retrievedRunboo
   retrievedRunbooks?: string[];
 }) {
   const hc = result.overallHealth || 'Fair';
-  const hColor: Record<string, string> = { Critical: 'text-red-400', Degraded: 'text-orange-400', High: 'text-orange-400', Fair: 'text-yellow-400', Medium: 'text-yellow-400', Good: 'text-green-400', Low: 'text-green-400' };
-  const hBorder: Record<string, string> = { Critical: 'border-red-400/25 bg-red-400/5', Degraded: 'border-orange-400/25 bg-orange-400/5', Fair: 'border-yellow-400/20 bg-yellow-400/5', Good: 'border-green-400/20 bg-green-400/5' };
+  const hColor: Record<string, string> = { Critical: 'text-red-400', Degraded: 'text-orange-400', High: 'text-orange-400', Fair: 'text-yellow-400', Medium: 'text-yellow-400', Good: 'text-teal-300', Low: 'text-teal-300' };
+  const hBorder: Record<string, string> = { Critical: 'border-red-400/25 bg-red-400/5', Degraded: 'border-orange-400/25 bg-orange-400/5', Fair: 'border-yellow-400/20 bg-yellow-400/5', Good: 'border-teal-300/20 bg-teal-300/5' };
 
   return (
     <div className="space-y-4">
@@ -985,7 +1039,7 @@ function FindingsPanel({ result, file, meta, expanded, onToggle, retrievedRunboo
                       <div className="space-y-1.5">
                         {f.recommendations.map((r, i) => (
                           <div key={i} className="flex gap-2 items-start p-2 bg-gray-950 rounded border border-gray-800 text-[11px]">
-                            <span className="w-4 h-4 rounded-full bg-green-400/10 border border-green-400/25 text-green-400 text-[9px] flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                            <span className="w-4 h-4 rounded-full bg-teal-300/10 border border-teal-300/25 text-teal-300 text-[9px] flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
                             <span className="text-white/75 leading-relaxed">{r}</span>
                           </div>
                         ))}
@@ -1012,11 +1066,11 @@ function RoutingPanel({ result, team, isCritical, notified, onNotify }: {
     <div className="space-y-4">
       <div className="text-xs text-white/70 leading-relaxed">
         Severity <span className="text-white font-semibold">{result.overallHealth}</span> routes to{' '}
-        <span className="text-green-400 font-mono">{team}</span>.
+        <span className="text-teal-300 font-mono">{team}</span>.
         {isCritical && <span className="text-red-400"> Critical override adds On-Call.</span>}
       </div>
       {teams.map(t => (
-        <div key={t} className={`border rounded-lg p-4 ${notified.has(t) ? 'border-green-400/30 bg-green-400/5' : 'border-gray-800 bg-gray-900'}`}>
+        <div key={t} className={`border rounded-lg p-4 ${notified.has(t) ? 'border-teal-300/30 bg-teal-300/5' : 'border-gray-800 bg-gray-900'}`}>
           <div className="font-mono font-bold text-sm mb-3">{t}</div>
           <div className="flex gap-2 mb-3">
             <span className="text-[9px] text-blue-400 border border-blue-400/25 bg-blue-400/6 px-2 py-0.5 rounded">Slack</span>
@@ -1024,7 +1078,7 @@ function RoutingPanel({ result, team, isCritical, notified, onNotify }: {
             <span className="text-[9px] text-amber-400 border border-amber-400/25 bg-amber-400/6 px-2 py-0.5 rounded">Email</span>
           </div>
           <button onClick={() => onNotify(t)}
-            className={`w-full py-2 text-[10px] font-mono rounded border transition-colors ${notified.has(t) ? 'border-green-400/25 text-green-400' : 'border-gray-700 text-gray-600 hover:border-green-400/40 hover:text-green-400'}`}>
+            className={`w-full py-2 text-[10px] font-mono rounded border transition-colors ${notified.has(t) ? 'border-teal-300/25 text-teal-300' : 'border-gray-700 text-gray-600 hover:border-teal-300/40 hover:text-teal-300'}`}>
             {notified.has(t) ? '✓ Notification sent (demo)' : '→ Notify this team'}
           </button>
         </div>
@@ -1050,8 +1104,8 @@ function PipelinePanel({ result, file }: { result: AnalysisResult; file: FileIte
       {steps.map((s, i) => (
         <div key={i} className="flex gap-3">
           <div className="flex flex-col items-center">
-            <div className="w-9 h-9 rounded-full border-2 border-green-400 bg-green-400/8 flex items-center justify-center text-sm z-10">{s.icon}</div>
-            {i < steps.length - 1 && <div className="w-0.5 flex-1 bg-green-400/25 my-0.5 min-h-[20px]" />}
+            <div className="w-9 h-9 rounded-full border-2 border-teal-300 bg-teal-300/8 flex items-center justify-center text-sm z-10">{s.icon}</div>
+            {i < steps.length - 1 && <div className="w-0.5 flex-1 bg-teal-300/25 my-0.5 min-h-[20px]" />}
           </div>
           <div className="pb-5 pt-1.5 flex-1">
             <div className="font-mono font-bold text-sm mb-1">{s.name}</div>
@@ -1083,7 +1137,7 @@ function TimelinePanel({ timeline, correlating, analyzing, progress, count }: {
         <div key={name} className="text-[10px] font-mono">
           {state === 'pending' && <span className="text-gray-700">○ {name}</span>}
           {state === 'running' && <span className="text-amber-400">⟳ {name}</span>}
-          {state === 'done'    && <span className="text-green-400">✓ {name}</span>}
+          {state === 'done'    && <span className="text-teal-300">✓ {name}</span>}
           {state === 'error'   && <span className="text-red-400">✗ {name}</span>}
         </div>
       ))}
@@ -1120,7 +1174,7 @@ function TimelinePanel({ timeline, correlating, analyzing, progress, count }: {
           { label: 'Severity',  value: timeline.overallSeverity, extra: 'text-red-400' },
           { label: 'Events',    value: `${timeline.timelineEvents?.length || 0}`,  extra: '' },
           { label: 'Causal Steps', value: `${timeline.causalChain?.length || 0}`,  extra: '' },
-          { label: 'Links',     value: `${timeline.crossArtifactLinks?.length || 0}`, extra: 'text-green-400' },
+          { label: 'Links',     value: `${timeline.crossArtifactLinks?.length || 0}`, extra: 'text-teal-300' },
         ].map(s => (
           <div key={s.label} className="bg-gray-900 border border-gray-800 rounded px-3 py-2">
             <div className="text-[9px] text-gray-600 uppercase tracking-widest mb-1">{s.label}</div>
@@ -1140,9 +1194,9 @@ function TimelinePanel({ timeline, correlating, analyzing, progress, count }: {
                 <div key={i} className="relative border border-gray-800 bg-gray-900 rounded-lg p-3">
                   <div className="absolute -left-[17px] top-4 w-2.5 h-2.5 rounded-full border-2 border-gray-700 bg-gray-900" />
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                    <span className="text-green-400 font-mono text-[10px]">{e.timestamp}</span>
+                    <span className="text-teal-300 font-mono text-[10px]">{e.timestamp}</span>
                     <span className={`text-[9px] px-1.5 py-0.5 rounded border font-mono ${LAYER_STYLE[e.layer] || 'text-gray-600 border-gray-800'}`}>{e.layer}</span>
-                    {e.linkedTo?.length > 0 && <span className="text-green-400 text-[9px]">🔗 {e.linkedTo.join(', ')}</span>}
+                    {e.linkedTo?.length > 0 && <span className="text-teal-300 text-[9px]">🔗 {e.linkedTo.join(', ')}</span>}
                     <span className="ml-auto text-[9px] text-gray-600 font-mono">{e.artifact}</span>
                   </div>
                   <div className="text-xs font-medium text-white/90 mb-1">{e.event}</div>
@@ -1161,12 +1215,12 @@ function TimelinePanel({ timeline, correlating, analyzing, progress, count }: {
           <div className="space-y-2">
             {timeline.causalChain.map((s, i) => (
               <div key={i} className="flex border border-gray-800 bg-gray-900 rounded-lg overflow-hidden">
-                <div className="w-8 bg-gray-950 border-r border-gray-800 flex items-center justify-center text-green-400 font-mono text-xs font-bold">{i + 1}</div>
+                <div className="w-8 bg-gray-950 border-r border-gray-800 flex items-center justify-center text-teal-300 font-mono text-xs font-bold">{i + 1}</div>
                 <div className="p-3 flex-1">
                   <div className="text-xs font-medium text-white/90 mb-1">{s.cause}</div>
                   <div className="flex items-center gap-2 text-[10px] text-gray-600">
                     <span className="text-red-400">▼</span>
-                    <span className="text-green-400 bg-green-400/8 border border-green-400/20 px-1.5 py-0.5 rounded text-[9px]">{s.linkType}</span>
+                    <span className="text-teal-300 bg-teal-300/8 border border-teal-300/20 px-1.5 py-0.5 rounded text-[9px]">{s.linkType}</span>
                     <span className="text-white/70">{s.effect}</span>
                   </div>
                   <div className="text-[9px] text-gray-600 font-mono mt-1">{s.sourceArtifact} → {s.targetArtifact}</div>
@@ -1184,7 +1238,7 @@ function TimelinePanel({ timeline, correlating, analyzing, progress, count }: {
           <div className="space-y-2">
             {timeline.crossArtifactLinks.map((lk, i) => (
               <div key={i} className="flex gap-3 border border-gray-800 bg-gray-900 rounded-lg p-3">
-                <span className="text-[9px] text-green-400 bg-green-400/8 border border-green-400/20 px-2 py-0.5 rounded font-mono flex-shrink-0 h-fit">{lk.entityType}</span>
+                <span className="text-[9px] text-teal-300 bg-teal-300/8 border border-teal-300/20 px-2 py-0.5 rounded font-mono flex-shrink-0 h-fit">{lk.entityType}</span>
                 <div>
                   <div className="text-xs font-medium text-white/90 mb-0.5">{lk.entityValue.slice(0, 80)}</div>
                   <div className="text-[10px] text-gray-600 font-mono mb-0.5">{lk.appearsIn.join(' · ')}</div>
@@ -1203,7 +1257,7 @@ function TimelinePanel({ timeline, correlating, analyzing, progress, count }: {
           <div className="space-y-1.5">
             {timeline.immediateActions.map((a, i) => (
               <div key={i} className="flex gap-2.5 items-start p-2.5 bg-gray-900 border border-gray-800 rounded text-[11px]">
-                <span className="w-4 h-4 rounded-full bg-green-400/10 border border-green-400/25 text-green-400 text-[9px] flex items-center justify-center flex-shrink-0 mt-0.5 font-mono">{i + 1}</span>
+                <span className="w-4 h-4 rounded-full bg-teal-300/10 border border-teal-300/25 text-teal-300 text-[9px] flex items-center justify-center flex-shrink-0 mt-0.5 font-mono">{i + 1}</span>
                 <span className="text-white/75 leading-relaxed">{a}</span>
               </div>
             ))}
@@ -1227,9 +1281,9 @@ function ChatPanel({ messages, input, setInput, onSend, sending }: {
 }) {
   return (
     <div style={{display:'flex',flexDirection:'column',height:'100%',gap:'12px'}}>
-      <div style={{padding:'12px 16px',background:'rgba(74,222,128,0.06)',
-                   border:'1px solid rgba(74,222,128,0.25)',borderRadius:'8px',flexShrink:0}}>
-        <div style={{fontSize:'11px',color:'#4ade80',fontWeight:600,fontFamily:'monospace',letterSpacing:'0.5px'}}>
+      <div style={{padding:'12px 16px',background:'rgba(94,234,212,0.06)',
+                   border:'1px solid rgba(94,234,212,0.25)',borderRadius:'8px',flexShrink:0}}>
+        <div style={{fontSize:'11px',color:'#5eead4',fontWeight:600,fontFamily:'monospace',letterSpacing:'0.5px'}}>
           💬 SRE COPILOT
         </div>
         <div style={{fontSize:'10px',color:'#6b7280',marginTop:4}}>
@@ -1248,14 +1302,14 @@ function ChatPanel({ messages, input, setInput, onSend, sending }: {
             <div key={i} style={{display:'flex',flexDirection:'column',gap:'4px',
                                   alignItems: isUser ? 'flex-end' : 'flex-start'}}>
               <div style={{fontFamily:'monospace',fontSize:'9px',color:'#6b7280',letterSpacing:'1px'}}>
-                {isUser ? 'YOU' : 'PERFAGENT'}
+                {isUser ? 'YOU' : 'OPSMIND'}
               </div>
               <div style={{
                 maxWidth:'75%',padding:'10px 14px',
-                background: isUser ? 'rgba(74,222,128,0.08)' : '#111827',
-                border: `1px solid ${isUser ? 'rgba(74,222,128,0.25)' : '#1f2937'}`,
+                background: isUser ? 'rgba(94,234,212,0.08)' : '#111827',
+                border: `1px solid ${isUser ? 'rgba(94,234,212,0.25)' : '#1f2937'}`,
                 borderRadius:'8px',
-                color: isUser ? '#4ade80' : '#e5e7eb',
+                color: isUser ? '#5eead4' : '#e5e7eb',
                 fontSize:'12px',lineHeight:1.55,whiteSpace:'pre-wrap'}}>
                 {m.content}
               </div>
@@ -1283,13 +1337,113 @@ function ChatPanel({ messages, input, setInput, onSend, sending }: {
         <button
           onClick={onSend}
           disabled={sending || !input.trim()}
-          style={{padding:'8px 16px',background:'rgba(74,222,128,0.12)',
-                  border:'1px solid #4ade80',color:'#4ade80',
+          style={{padding:'8px 16px',background:'rgba(94,234,212,0.12)',
+                  border:'1px solid #5eead4',color:'#5eead4',
                   fontFamily:'monospace',fontSize:'11px',fontWeight:600,
                   borderRadius:'6px',cursor:sending ? 'not-allowed' : 'pointer',
                   opacity: sending ? 0.5 : 1}}>
           Send
         </button>
+      </div>
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// RunsPanel — dashboard of previous OpsMind runs
+// (browser-persisted history; production uses /runs API + JSONL log)
+// ─────────────────────────────────────────────────────────────
+function RunsPanel() {
+  const runs = loadRunHistory();
+
+  if (runs.length === 0) {
+    return (
+      <div style={{textAlign:'center',padding:'60px 20px',color:'#6b7280',fontSize:'12px',lineHeight:1.7}}>
+        No runs recorded yet.
+        <br /><br />
+        Run <b style={{color:'#5eead4'}}>Analyze All + Timeline</b> and it will be saved here automatically.
+      </div>
+    );
+  }
+
+  // Aggregate
+  const sevColors: Record<string, string> = {
+    Critical: '#ff5064', High: '#ff8246', Medium: '#fbbf24', Low: '#5eead4', Info: '#6b7280',
+  };
+  const sevTotals: Record<string, number> = {};
+  const skillTotals: Record<string, number> = {};
+  let totFindings = 0, totDuration = 0;
+  for (const r of runs) {
+    totFindings += r.findingsTotal;
+    totDuration += r.durationMs;
+    for (const k in r.findingsBySeverity) sevTotals[k] = (sevTotals[k] || 0) + r.findingsBySeverity[k];
+    for (const k in r.findingsBySkill)    skillTotals[k] = (skillTotals[k] || 0) + r.findingsBySkill[k];
+  }
+  const sevMax   = Math.max(1, ...Object.values(sevTotals));
+  const skillMax = Math.max(1, ...Object.values(skillTotals));
+
+  const cards: [string, string | number][] = [
+    ['Total runs', runs.length],
+    ['Total findings', totFindings],
+    ['Avg duration', Math.round(totDuration / runs.length / 1000) + 's'],
+    ['Critical findings', sevTotals.Critical || 0],
+  ];
+
+  const Bar = ({ label, value, max, color }: { label: string; value: number; max: number; color: string }) => (
+    <div style={{display:'flex',alignItems:'center',gap:'10px',margin:'6px 0'}}>
+      <div style={{width:'120px',fontFamily:'monospace',fontSize:'10px',color:'#6b7280',textAlign:'right',flexShrink:0}}>{label}</div>
+      <div style={{flex:1,height:'14px',background:'#111827',borderRadius:'3px',overflow:'hidden'}}>
+        <div style={{width:(max > 0 ? Math.round(value / max * 100) : 0) + '%',height:'100%',background:color,borderRadius:'3px'}} />
+      </div>
+      <div style={{width:'32px',fontFamily:'monospace',fontSize:'11px',color:'#e5e7eb'}}>{value}</div>
+    </div>
+  );
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
+      <div style={{fontFamily:'monospace',fontSize:'11px',color:'#5eead4',letterSpacing:'1px'}}>
+        📊 RUN HISTORY — {runs.length} RECORDED RUN{runs.length > 1 ? 'S' : ''}
+      </div>
+
+      <div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
+        {cards.map(([label, value]) => (
+          <div key={label} style={{flex:1,minWidth:'130px',background:'#111827',border:'1px solid #1f2937',borderRadius:'8px',padding:'14px 16px'}}>
+            <div style={{fontFamily:'monospace',fontSize:'22px',color:'#5eead4'}}>{value}</div>
+            <div style={{fontSize:'10px',color:'#6b7280',marginTop:'4px'}}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'24px'}}>
+        <div>
+          <div style={{fontFamily:'monospace',fontSize:'10px',color:'#6b7280',letterSpacing:'1px',marginBottom:'8px'}}>FINDINGS BY SEVERITY</div>
+          {['Critical','High','Medium','Low','Info'].filter(s => sevTotals[s]).map(s => (
+            <Bar key={s} label={s} value={sevTotals[s]} max={sevMax} color={sevColors[s]} />
+          ))}
+        </div>
+        <div>
+          <div style={{fontFamily:'monospace',fontSize:'10px',color:'#6b7280',letterSpacing:'1px',marginBottom:'8px'}}>FINDINGS BY SKILL</div>
+          {Object.entries(skillTotals).sort((a, b) => b[1] - a[1]).map(([s, v]) => (
+            <Bar key={s} label={SKILL[s as SkillName]?.label || s} value={v} max={skillMax} color={SKILL[s as SkillName]?.color || '#5eead4'} />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div style={{fontFamily:'monospace',fontSize:'10px',color:'#6b7280',letterSpacing:'1px',marginBottom:'8px'}}>RECENT RUNS</div>
+        <div style={{background:'#111827',border:'1px solid #1f2937',borderRadius:'8px',overflow:'hidden'}}>
+          {runs.slice(0, 15).map((r, i) => (
+            <div key={r.id} style={{display:'grid',gridTemplateColumns:'150px 70px 80px 60px 1fr',gap:'10px',padding:'9px 12px',
+                                     borderTop: i > 0 ? '1px solid #1f2937' : 'none',alignItems:'center'}}>
+              <span style={{fontFamily:'monospace',fontSize:'10px',color:'#6b7280'}}>{r.startedAt.replace('T',' ').slice(0,19)}</span>
+              <span style={{fontSize:'11px',color:'#e5e7eb'}}>{r.fileCount} files</span>
+              <span style={{fontFamily:'monospace',fontSize:'10px',color:sevColors[r.overallSeverity] || '#6b7280'}}>{r.overallSeverity}</span>
+              <span style={{fontSize:'11px',color:'#e5e7eb'}}>{r.findingsTotal}</span>
+              <span style={{fontSize:'10px',color:'#6b7280',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.rootCause || '—'}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

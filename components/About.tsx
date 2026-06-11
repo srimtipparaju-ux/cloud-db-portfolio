@@ -1,25 +1,31 @@
 export default function About() {
   return (
-    <section className="p-10 max-w-4xl mx-auto">
-      <h2 className="text-3xl mb-4">About Me</h2>
+    <section className="px-6 py-20 max-w-6xl mx-auto">
+      <div className="section-head">
+        <div className="eyebrow">about</div>
+        <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
+          The data always tells the story. I read it fast.
+        </h2>
+      </div>
 
-      <p className="text-gray-300 leading-7">
-        I am a Cloud Database Engineer with over 13 years of experience designing,
-        optimizing, and managing enterprise-scale Oracle database systems across
-        on-prem and cloud environments, including Oracle Cloud Infrastructure (OCI).
-      </p>
-
-      <p className="text-gray-300 mt-4 leading-7">
-        My expertise includes Oracle Autonomous Databases, multitenant architectures
-        (CDB/PDB), and building cloud-native database solutions with a strong focus
-        on performance, scalability, and reliability.
-      </p>
-
-      <p className="text-gray-300 mt-4 leading-7">
-        I have led large-scale database migrations, built automation pipelines,
-        and developed internal tools to improve database deployment, monitoring,
-        and operational efficiency across enterprise systems.
-      </p>
+      <div className="grid md:grid-cols-3 gap-8 text-[var(--ink-soft)] leading-relaxed">
+        <p>
+          13 years embedded inside Oracle and Cisco engineering — diagnosing
+          production incidents, building the tooling that prevents recurrence,
+          and running reliability programs across 20+ teams at scale.
+        </p>
+        <p>
+          At Oracle, I owned SLO/SLA targets on OCI-hosted cloud platforms:
+          automated provisioning pipelines, observability builds, and the
+          blameless post-mortem culture that actually reduces repeat incidents.
+        </p>
+        <p>
+          Recent work extends into AI — OpsMind is an autonomous SRE copilot
+          that triages incidents across Oracle, JVM, frontend, and Kubernetes
+          artifacts in 30 seconds, with RAG over runbooks and full LLMOps
+          observability.
+        </p>
+      </div>
     </section>
   );
 }

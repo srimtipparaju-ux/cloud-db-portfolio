@@ -67,7 +67,14 @@ export default function Home() {
 
       <Skills />
       <Contact />
-      <VisitorCounter />
+
+      <footer className="border-t border-[var(--line-soft)]">
+        <div className="max-w-6xl mx-auto px-6 py-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 font-mono text-[11px] text-[var(--ink-dim)]">
+          <span>built with Next.js · deployed on Vercel</span>
+          <span>·</span>
+          <VisitorCounter />
+        </div>
+      </footer>
     </main>
   );
 }

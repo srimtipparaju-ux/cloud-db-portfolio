@@ -15,13 +15,12 @@ export default function VisitorCounter() {
         setVisits(0);
       }
     };
-
     fetchVisits();
   }, []);
 
   return (
-    <div className="text-center mt-10 text-gray-500 text-sm">
-      👀 Visitors: {visits ?? "Loading..."}
-    </div>
+    <span className="font-mono text-[11px] text-[var(--ink-dim)]">
+      👀 {visits ?? "…"} visitors
+    </span>
   );
 }

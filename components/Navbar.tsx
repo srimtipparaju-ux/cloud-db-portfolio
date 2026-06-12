@@ -20,12 +20,20 @@ export default function Navbar() {
           <span className="text-[var(--teal)]">~/</span>sri-tipparaju
         </a>
 
-        <div className="flex gap-6 text-sm text-[var(--ink-soft)]">
+        <div className="flex items-center gap-6 text-sm text-[var(--ink-soft)]">
           {LINKS.map((l) => (
             <a key={l.href} href={l.href} className="hover:text-[var(--teal)] transition-colors">
               {l.label}
             </a>
           ))}
+          <a
+            href="https://github.com/srimtipparaju-ux"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-xs border border-[var(--line)] rounded px-3 py-1.5 hover:border-[var(--teal)] hover:text-[var(--teal)] transition-colors"
+          >
+            GitHub ↗
+          </a>
         </div>
       </div>
     </motion.nav>

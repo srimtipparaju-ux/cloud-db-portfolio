@@ -13,6 +13,12 @@ const certs = [
     link: "https://www.credly.com/badges/fd5a5589-1f7d-4c64-9b28-56caf5ea7614/public_url",
     expires: "exp. Apr 2028",
   },
+  {
+    name: "Azure AI Apps and Agents Developer Associate",
+    image: "/MS_Azure_AI.png",
+    link: "https://learn.microsoft.com/api/credentials/share/en-us/SriManaswiTipparaju-1662/BD82E3C8FDAEB371?sharingId=218D95A276223888",
+    expires: "exp. Jun 2027",
+  },
 ];
 
 export default function Certifications() {
